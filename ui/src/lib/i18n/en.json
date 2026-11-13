@@ -766,5 +766,12 @@
  "{n} von {m} falsch": "{n} of {m} wrong",
  "{n} Karten üben": "Practice {n} cards",
  "Farbe ändern": "Change color",
- "Standardfarbe": "Default color"
+ "Standardfarbe": "Default color",
+ "„{name}“ liegt jetzt im Archiv": "“{name}” is now in the archive",
+ "Blendet den Stapel samt Unterstapeln aus und pausiert seine Karten, bis du ihn zurückholst": "Hides the deck and its subdecks and pauses its cards until you bring it back",
+ "Archivieren": "Archive",
+ "Archiv": "Archive",
+ "„{name}“ ist zurück": "“{name}” is back",
+ "Zurückholen": "Restore",
+ "Karten im Archiv werden nicht fällig. Zurückgeholt geht es weiter, wo du aufgehört hast.": "Cards in the archive don't come due. Once restored, you pick up where you left off."
 }

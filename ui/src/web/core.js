@@ -11,6 +11,7 @@ import { lang, t as tr } from '../lib/i18n.js'
 const INBOX_TAG = 'Claude-Eingang'
 const FEATURES = { exams: false, plan: false, weak: false, inbox: true, hard_wrong: false }
 const EXAMS = 'betteranki.exams' // {deck_id: "YYYY-MM-DD"}, same key as the desktop
+const ARCHIVED = 'muisti.archived' // {deck_id: [card ids the archive suspended]}, same key as the desktop
 const now = () => Math.floor(Date.now() / 1000)
 const cfg = (key, dflt) => (S.config.has(key) ? S.config.get(key).val : dflt)
 const setCfg = (key, val) => write('config', [{ key, val, mod: now() }])
@@ -80,14 +81,16 @@ export function decks() {
   const tm = t()
   const all = [...S.decks.values()].map((r) => r.data).sort((a, b) => a.name.localeCompare(b.name, 'de'))
   const colors = cfg('betteranki.colors', {})
+  const archived = cfg(ARCHIVED, {})
   const byName = new Map()
   const roots = []
   for (const d of all) {
     if (d.id === 1 && all.length > 1 && !cardsIn(new Set([1])).length) continue // Anki hides an empty Default
     const c = countsFor(d.id, tm)
-    const node = { id: d.id, name: d.name, short: d.name.split('::').pop(), ...c, collapsed: !!d.collapsed, filtered: !!d.dyn, color: colors[d.id] ?? null, children: [] }
-    byName.set(d.name, node)
     const parent = byName.get(d.name.split('::').slice(0, -1).join('::'))
+    const node = { id: d.id, name: d.name, short: d.name.split('::').pop(), ...c, collapsed: !!d.collapsed, filtered: !!d.dyn, color: colors[d.id] ?? null,
+      archived: !!(archived[d.id] || parent?.archived), children: [] }
+    byName.set(d.name, node)
     ;(parent ? parent.children : roots).push(node)
   }
   return roots
@@ -129,6 +132,25 @@ export function set_deck_color(deck_id, color) {
 
 export function set_collapsed(deck_id, collapsed) {
   saveDeck({ ...deckOf(deck_id), collapsed })
+}
+
+// Archive (see core.py): out of "Heute", cards suspended; only the cards it suspended come back on restore
+export function archive_deck(deck_id) {
+  const archived = cfg(ARCHIVED, {})
+  if (archived[deck_id]) return 0
+  if (deckOf(deck_id).dyn) throw new Error('Gefilterte Stapel lassen sich nicht archivieren')
+  const ids = cardsIn(subtree(deck_id)).filter((c) => c.queue !== -1).map((c) => c.id)
+  suspend(ids)
+  setCfg(ARCHIVED, { ...archived, [deck_id]: ids })
+  return ids.length
+}
+
+export function restore_deck(deck_id) {
+  const { [deck_id]: cids = [], ...rest } = cfg(ARCHIVED, {})
+  const ids = cids.filter((id) => S.cards.get(id)?.queue === -1) // deleted ones are gone
+  suspend(ids, false)
+  setCfg(ARCHIVED, rest)
+  return ids.length
 }
 
 export function reset_deck(deck_id) {

@@ -766,5 +766,12 @@
  "{n} von {m} falsch": "{n} de {m} incorrectas",
  "{n} Karten üben": "Practicar {n} tarjetas",
  "Farbe ändern": "Cambiar color",
- "Standardfarbe": "Color predeterminado"
+ "Standardfarbe": "Color predeterminado",
+ "„{name}“ liegt jetzt im Archiv": "«{name}» está ahora en el archivo",
+ "Blendet den Stapel samt Unterstapeln aus und pausiert seine Karten, bis du ihn zurückholst": "Oculta el mazo y sus submazos y pausa sus tarjetas hasta que lo recuperes",
+ "Archivieren": "Archivar",
+ "Archiv": "Archivo",
+ "„{name}“ ist zurück": "«{name}» ha vuelto",
+ "Zurückholen": "Recuperar",
+ "Karten im Archiv werden nicht fällig. Zurückgeholt geht es weiter, wo du aufgehört hast.": "Las tarjetas archivadas no vencen. Al recuperarlas, sigues donde lo dejaste."
 }

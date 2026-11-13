@@ -21,6 +21,7 @@ from anki.collection import (
 )
 import anki.lang
 from anki.sound import SoundOrVideoTag, TTSTag
+from anki.utils import ids2str
 
 # UI language (Settings) -> Anki's own strings: interval labels, undo names, import messages, stats
 _ANKI_LANGS = {"de": "de_DE", "en": "en_US", "es": "es_ES"}
@@ -117,9 +118,11 @@ class Core:
     @_locked
     def decks(self) -> list[dict]:
         colors = self._col.get_config(self._COLORS, {})
+        archived = self._col.get_config(self._ARCHIVED, {})
 
-        def walk(node, prefix=""):
+        def walk(node, prefix="", in_archive=False):
             name = f"{prefix}::{node.name}" if prefix else node.name
+            in_archive = in_archive or str(node.deck_id) in archived
             return {
                 "id": node.deck_id,
                 "name": name,
@@ -130,7 +133,8 @@ class Core:
                 "collapsed": node.collapsed,
                 "filtered": node.filtered,
                 "color": colors.get(str(node.deck_id)),
-                "children": [walk(c, name) for c in node.children],
+                "archived": in_archive,  # this deck or a parent is in the archive
+                "children": [walk(c, name, in_archive) for c in node.children],
             }
 
         root = self._col.sched.deck_due_tree()
@@ -160,6 +164,35 @@ class Core:
     @_locked
     def set_collapsed(self, deck_id: int, collapsed: bool) -> None:
         self._col.decks.set_collapsed(deck_id, collapsed, scope=0)  # 0 = REVIEWER scope
+
+    # Archive: a deck you're done with for now. It leaves "Heute" and its cards (subdecks too) are suspended,
+    # so nothing comes due. Only the cards the archive suspended are remembered, so restoring leaves cards
+    # you had suspended yourself alone. Anki has no such thing; it's a config key, synced like the colors.
+    _ARCHIVED = "muisti.archived"  # {deck_id: [card ids the archive suspended]}
+
+    @_locked
+    def archive_deck(self, deck_id: int) -> int:
+        """Put a deck with its subdecks into the archive. Returns how many cards were paused."""
+        archived = self._col.get_config(self._ARCHIVED, {})
+        if str(deck_id) in archived:
+            return 0
+        if self._col.decks.get(deck_id)["dyn"]:
+            raise ValueError("Gefilterte Stapel lassen sich nicht archivieren")
+        cids = self._col.decks.cids(deck_id, children=True)
+        cids = self._col.db.list(f"select id from cards where queue != -1 and id in {ids2str(cids)}")
+        self._col.sched.suspend_cards(cids)
+        self._col.set_config(self._ARCHIVED, {**archived, str(deck_id): cids})
+        return len(cids)
+
+    @_locked
+    def restore_deck(self, deck_id: int) -> int:
+        """Take a deck out of the archive; its cards come back where they were. Returns how many."""
+        archived = dict(self._col.get_config(self._ARCHIVED, {}))
+        cids = archived.pop(str(deck_id), [])
+        cids = self._col.db.list(f"select id from cards where queue = -1 and id in {ids2str(cids)}")  # deleted ones are gone
+        self._col.sched.unsuspend_cards(cids)
+        self._col.set_config(self._ARCHIVED, archived)
+        return len(cids)
 
     # ---------- deck options (presets) & FSRS ----------
 

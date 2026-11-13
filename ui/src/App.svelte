@@ -171,7 +171,7 @@
     </nav>
     <div class="label">{t('Stapel')}</div>
     <nav class="decks">
-      {#each flat.filter((d) => d.depth === 0 || openDecks.has(d.top)) as d (d.id)}
+      {#each flat.filter((d) => !d.archived && (d.depth === 0 || openDecks.has(d.top))) as d (d.id)}
         <div class="deckrow" style:padding-left="{Math.max(0, d.depth - 1) * 14}px">
           {#if d.depth === 0 && d.children.length}
             <button class="plain fold" aria-expanded={openDecks.has(d.id)} aria-label={openDecks.has(d.id) ? t('Zuklappen') : t('Aufklappen')} title={openDecks.has(d.id) ? t('Zuklappen') : t('Aufklappen')} onclick={() => toggleDeck(d.id)}>

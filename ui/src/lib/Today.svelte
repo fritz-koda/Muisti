@@ -14,6 +14,7 @@
   let newName = $state('')
   let confirmDelete = $state(null)
   let confirmReset = $state(null)
+  let showArchive = $state(false)
   let filtered = $state(null) // form state for a new filtered deck
   let planMinutes = $state(30)
   let empty = $state(false) // no cards yet: offer to bring them over from Anki
@@ -34,11 +35,11 @@
 
   const dateLabel = new Date().toLocaleDateString(lang, { weekday: 'long', day: 'numeric', month: 'long' })
 
-  // Hide children of collapsed decks.
+  // Hide children of collapsed decks, and everything in the archive.
   const rows = $derived.by(() => {
     const out = []
     let hideBelow = Infinity
-    for (const d of flat) {
+    for (const d of flat.filter((d) => !d.archived)) {
       if (d.depth > hideBelow) continue
       hideBelow = d.collapsed ? d.depth : Infinity
       out.push(d)
@@ -46,7 +47,18 @@
     return out
   })
 
-  const firstDue = $derived(flat.find((d) => d.depth === 0 && total(d) > 0))
+  const firstDue = $derived(flat.find((d) => d.depth === 0 && !d.archived && total(d) > 0))
+
+  // what was put into the archive itself (its subdecks go along and aren't listed separately)
+  const archive = $derived.by(() => {
+    const names = new Set(flat.filter((d) => d.archived).map((d) => d.name))
+    return flat.filter((d) => d.archived && !names.has(d.name.split('::').slice(0, -1).join('::')))
+  })
+
+  async function toArchive(d) {
+    menuFor = null
+    await run(() => api.archive_deck(d.id), t('„{name}“ liegt jetzt im Archiv', { name: d.name }))
+  }
 
   function onKey(e) {
     if ((e.target instanceof Element && e.target.closest('input, textarea, select')) || e.metaKey || e.ctrlKey) return
@@ -204,6 +216,7 @@
                         <button class="plain" onclick={() => onOptions(d)}>{t('Optionen')}</button>
                         <button class="plain" onclick={() => { creating = true; newName = d.name + '::'; menuFor = null }}>{t('Unterstapel anlegen')}</button>
                         <button class="plain" onclick={() => exportDeck(d)}>{t('Als .apkg exportieren')}</button>
+                        <button class="plain" onclick={() => toArchive(d)} title={t('Blendet den Stapel samt Unterstapeln aus und pausiert seine Karten, bis du ihn zurückholst')}>{t('Archivieren')}</button>
                         <button class="plain del" onclick={() => reset(d)} title={t('Alle Karten (auch in Unterstapeln) werden wieder neu, Lernverlauf bleibt in der Statistik')}>
                           {confirmReset === d.id ? t('Wirklich alles zurücksetzen?') : t('Lernstand zurücksetzen')}
                         </button>
@@ -221,6 +234,25 @@
         {/each}
       </tbody>
     </table>
+    {#if archive.length}
+      <div class="archive">
+        <button class="plain twist-row" onclick={() => (showArchive = !showArchive)} aria-expanded={showArchive}>
+          <span class="twist" class:open={showArchive}><ChevronRight size={15} /></span>
+          {t('Archiv')} <span class="muted num">{archive.length}</span>
+        </button>
+        {#if showArchive}
+          <ul>
+            {#each archive as d (d.id)}
+              <li>
+                <span class="aname">{d.name}</span>
+                <button class="ghost sm" onclick={() => run(() => api.restore_deck(d.id), t('„{name}“ ist zurück', { name: d.name }))}>{t('Zurückholen')}</button>
+              </li>
+            {/each}
+          </ul>
+          <p class="muted hint">{t('Karten im Archiv werden nicht fällig. Zurückgeholt geht es weiter, wo du aufgehört hast.')}</p>
+        {/if}
+      </div>
+    {/if}
     <div class="new-deck">
       {#if creating}
         <!-- svelte-ignore a11y_autofocus -->
@@ -301,6 +333,14 @@
   .menu .reset { grid-column: 1 / -1; justify-content: center; padding: 6px; font-size: 13px; color: var(--ink-2); }
   .empty { text-align: left; color: var(--ink-2); padding: 32px 12px; }
   .new-deck { padding-top: 16px; display: flex; gap: 8px; }
+  .archive { margin-top: 16px; border-top: 1px solid var(--rule); padding-top: 12px; }
+  .twist-row { gap: 6px; color: var(--ink-2); font-weight: 600; padding: 4px 0; }
+  .twist-row .twist { display: inline-flex; align-items: center; }
+  .archive ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; }
+  .archive li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 12px 6px 34px; border-radius: 8px; }
+  .archive li:hover { background: var(--paper-2); }
+  .aname { color: var(--ink-2); overflow-wrap: anywhere; }
+  .archive .hint { font-size: 13px; padding: 6px 0 0 34px; }
   .welcome { border: 1px solid var(--rule); border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 8px; max-width: 860px; }
   .welcome h2 { font-size: 16px; font-weight: 700; }
   .welcome p { font-size: 14px; }
