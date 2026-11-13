@@ -766,5 +766,6 @@
  "{n} von {m} falsch": "{n} de {m} incorrectas",
  "{n} Karten üben": "Practicar {n} tarjetas",
  "Farbe ändern": "Cambiar color",
- "Standardfarbe": "Color predeterminado"
+ "Standardfarbe": "Color predeterminado",
+ "„{name}“ liegt jetzt in „{parent}“": "«{name}» está ahora en «{parent}»"
 }

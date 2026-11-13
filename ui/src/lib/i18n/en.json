@@ -766,5 +766,6 @@
  "{n} von {m} falsch": "{n} of {m} wrong",
  "{n} Karten üben": "Practice {n} cards",
  "Farbe ändern": "Change color",
- "Standardfarbe": "Default color"
+ "Standardfarbe": "Default color",
+ "„{name}“ liegt jetzt in „{parent}“": "“{name}” is now in “{parent}”"
 }

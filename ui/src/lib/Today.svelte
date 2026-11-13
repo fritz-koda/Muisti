@@ -48,6 +48,39 @@
 
   const firstDue = $derived(flat.find((d) => d.depth === 0 && total(d) > 0))
 
+  // Drag & drop: the middle of a row makes the deck its subdeck, the upper/lower edge puts it before/after it.
+  let dragId = $state(null)
+  let dropAt = $state(null) // { id, pos: 'before' | 'into' | 'after' }
+  const parentName = (d) => d.name.split('::').slice(0, -1).join('::')
+
+  function dragOver(e, target) {
+    const d = flat.find((x) => x.id === dragId)
+    if (!d || target.id === d.id || target.name.startsWith(d.name + '::')) return (dropAt = null) // not into itself
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    const r = e.currentTarget.getBoundingClientRect()
+    const y = (e.clientY - r.top) / r.height
+    const edge = y < 0.5 ? 'before' : 'after'
+    dropAt = { id: target.id, pos: y < 0.25 || y > 0.75 || target.filtered ? edge : 'into' } // filtered decks have no subdecks
+  }
+
+  async function dropOn(target) {
+    const d = flat.find((x) => x.id === dragId)
+    const pos = dropAt?.id === target.id ? dropAt.pos : null
+    dragId = dropAt = null
+    if (!d || !pos) return
+    const parent = pos === 'into' ? target.name : parentName(target)
+    await run(async () => {
+      if (parent !== parentName(d)) await api.move_deck(d.id, parent ? flat.find((x) => x.name === parent).id : null)
+      if (pos === 'into' && target.collapsed) await api.set_collapsed(target.id, false) // show where it went
+      if (pos !== 'into') {
+        const ids = flat.map((x) => x.id).filter((id) => id !== d.id)
+        ids.splice(ids.indexOf(target.id) + (pos === 'after' ? 1 : 0), 0, d.id)
+        await api.set_deck_order(ids)
+      }
+    }, pos === 'into' ? t('„{name}“ liegt jetzt in „{parent}“', { name: d.short, parent: target.name }) : null)
+  }
+
   function onKey(e) {
     if ((e.target instanceof Element && e.target.closest('input, textarea, select')) || e.metaKey || e.ctrlKey) return
     if (e.key === ' ' && firstDue) {
@@ -155,7 +188,14 @@
       </thead>
       <tbody>
         {#each rows as d (d.id)}
-          <tr>
+          <tr draggable={renaming !== d.id} class:dragged={dragId === d.id}
+            class:drop-before={dropAt?.id === d.id && dropAt.pos === 'before'}
+            class:drop-into={dropAt?.id === d.id && dropAt.pos === 'into'}
+            class:drop-after={dropAt?.id === d.id && dropAt.pos === 'after'}
+            ondragstart={(e) => { dragId = d.id; menuFor = null; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('application/x-muisti-deck', String(d.id)) }}
+            ondragover={(e) => dragOver(e, d)}
+            ondrop={(e) => { e.preventDefault(); dropOn(d) }}
+            ondragend={() => (dragId = dropAt = null)}>
             <td class="name-cell">
               <span class="deck" style:padding-left="{d.depth * 22}px">
                 {#if d.children.length}
@@ -264,6 +304,12 @@
   .actions { margin-left: auto; display: flex; gap: 8px; }
   kbd.inv { color: var(--paper); border-color: color-mix(in srgb, var(--paper) 40%, transparent); }
   .deck { display: flex; align-items: center; gap: 8px; }
+  tr[draggable='true'] .deck { cursor: grab; }
+  tr.dragged { opacity: 0.4; }
+  tr.drop-before td { box-shadow: inset 0 2px 0 var(--ink); }
+  tr.drop-after td { box-shadow: inset 0 -2px 0 var(--ink); }
+  tr.drop-into td { background: var(--paper-2); }
+  tr.drop-into .dname { text-decoration: underline; text-underline-offset: 4px; }
   .twist { width: 26px; height: 26px; padding: 0; justify-content: center; flex: none; }
   .twist :global(svg) { transition: transform 160ms var(--ease); }
   .twist.open :global(svg) { transform: rotate(90deg); }

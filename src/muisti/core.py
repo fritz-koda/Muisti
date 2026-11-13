@@ -117,6 +117,7 @@ class Core:
     @_locked
     def decks(self) -> list[dict]:
         colors = self._col.get_config(self._COLORS, {})
+        order = {did: i for i, did in enumerate(self._col.get_config(self._ORDER, []))}
 
         def walk(node, prefix=""):
             name = f"{prefix}::{node.name}" if prefix else node.name
@@ -130,11 +131,29 @@ class Core:
                 "collapsed": node.collapsed,
                 "filtered": node.filtered,
                 "color": colors.get(str(node.deck_id)),
-                "children": [walk(c, name) for c in node.children],
+                "children": [walk(c, name) for c in self._ordered(node.children, order)],
             }
 
         root = self._col.sched.deck_due_tree()
-        return [walk(c) for c in root.children]
+        return [walk(c) for c in self._ordered(root.children, order)]
+
+    # Your own order of decks on "Heute" (drag & drop). Anki only sorts by name; this is a config key, synced like
+    # the colors. Decks not in it (new ones) come after the sorted ones, by name as before.
+    _ORDER = "muisti.deck_order"  # [deck ids]
+
+    @staticmethod
+    def _ordered(nodes, order: dict) -> list:
+        return sorted(nodes, key=lambda n: order.get(n.deck_id, len(order)))  # stable: the rest stays by name
+
+    @_locked
+    def set_deck_order(self, deck_ids: list[int]) -> None:
+        self._col.set_config(self._ORDER, [int(d) for d in deck_ids])
+
+    @_locked
+    def move_deck(self, deck_id: int, parent_id: int | None = None) -> int:
+        """Make a deck a subdeck of parent_id (None: top level), like dragging it in Anki. A name that's taken
+        gets a "+"; moving a deck into its own subdeck does nothing. Returns how many decks moved (0 or 1)."""
+        return self._col.decks.reparent([deck_id], parent_id or 0).count
 
     _COLORS = "betteranki.colors"  # {deck_id: "#rrggbb"}, synced like any config key
 

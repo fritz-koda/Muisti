@@ -11,6 +11,7 @@ import { lang, t as tr } from '../lib/i18n.js'
 const INBOX_TAG = 'Claude-Eingang'
 const FEATURES = { exams: false, plan: false, weak: false, inbox: true, hard_wrong: false }
 const EXAMS = 'betteranki.exams' // {deck_id: "YYYY-MM-DD"}, same key as the desktop
+const ORDER = 'muisti.deck_order' // [deck ids] from drag & drop, same key as the desktop
 const now = () => Math.floor(Date.now() / 1000)
 const cfg = (key, dflt) => (S.config.has(key) ? S.config.get(key).val : dflt)
 const setCfg = (key, val) => write('config', [{ key, val, mod: now() }])
@@ -90,7 +91,30 @@ export function decks() {
     const parent = byName.get(d.name.split('::').slice(0, -1).join('::'))
     ;(parent ? parent.children : roots).push(node)
   }
-  return roots
+  // your own order first, like core.py; the rest stays by name (sort is stable)
+  const order = new Map(cfg(ORDER, []).map((id, i) => [id, i]))
+  const sort = (nodes) => {
+    nodes.sort((a, b) => (order.get(a.id) ?? order.size) - (order.get(b.id) ?? order.size))
+    nodes.forEach((n) => sort(n.children))
+    return nodes
+  }
+  return sort(roots)
+}
+
+export const set_deck_order = (deck_ids) => setCfg(ORDER, deck_ids.map(Number))
+
+/** Like Anki's reparent: a taken name gets a "+", into its own subdeck does nothing. */
+export function move_deck(deck_id, parent_id = null) {
+  const d = deckOf(deck_id)
+  const parent = parent_id == null ? null : deckOf(parent_id)
+  if (parent?.dyn) throw new Error('Auswahlstapel können keine Unterstapel haben.')
+  if (parent && (parent.id === d.id || parent.name.startsWith(d.name + '::'))) return 0
+  const names = new Set([...S.decks.values()].map((r) => r.data.name))
+  let name = (parent ? parent.name + '::' : '') + d.name.split('::').pop()
+  if (name === d.name) return 0
+  while (names.has(name)) name += '+'
+  rename_deck(deck_id, name)
+  return 1
 }
 
 export function create_deck(name) {
